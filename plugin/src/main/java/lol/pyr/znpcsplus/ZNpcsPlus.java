@@ -154,6 +154,7 @@ public class ZNpcsPlus {
         typeRegistry.registerDefault(packetEvents, propertyRegistry);
         actionRegistry.registerTypes(scheduler, adventure, textSerializer, bungeeConnector);
         packetEvents.getEventManager().registerListener(new InteractionPacketListener(userManager, npcRegistry, typeRegistry, scheduler), PacketListenerPriority.MONITOR);
+        Bukkit.getLogger().info("[ZNPC-DEBUG] InteractionPacketListener registered on packetevents instance " + packetEvents);
         packetEvents.getEventManager().registerListener(new ClientPacketListener(configManager), PacketListenerPriority.LOWEST);
         new Metrics(bootstrap, 18244);
         pluginManager.registerEvents(new UserListener(userManager), bootstrap);

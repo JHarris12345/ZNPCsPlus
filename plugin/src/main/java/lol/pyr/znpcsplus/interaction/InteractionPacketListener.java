@@ -37,16 +37,36 @@ public class InteractionPacketListener implements PacketListener {
         this.scheduler = scheduler;
     }
 
+    /** TEMPORARY DEBUG BUILD - logs which early return swallows an NPC click. Not for production. */
+    private static void dbg(String msg) {
+        Bukkit.getLogger().info("[ZNPC-DEBUG] " + msg);
+    }
+
     @Override
     public void onPacketReceive(PacketReceiveEvent event) {
         if (event.getPacketType() != PacketType.Play.Client.INTERACT_ENTITY) return;
+        dbg("INTERACT_ENTITY received");
+
         Player player = (Player) event.getPlayer();
-        if (player == null) return;
+        if (player == null) {
+            dbg("  -> DROPPED: event.getPlayer() was null");
+            return;
+        }
+        dbg("  player = " + player.getName());
 
         WrapperPlayClientInteractEntity packet = new WrapperPlayClientInteractEntity(event);
+        dbg("  entityId = " + packet.getEntityId() + ", action = " + packet.getAction());
 
         NpcEntryImpl entry = npcRegistry.getByEntityId(packet.getEntityId());
-        if (entry == null || !entry.isProcessed()) return;
+        if (entry == null) {
+            dbg("  -> DROPPED: no NPC registered with entity id " + packet.getEntityId());
+            return;
+        }
+        if (!entry.isProcessed()) {
+            dbg("  -> DROPPED: NPC " + entry.getId() + " is not processed");
+            return;
+        }
+        dbg("  matched NPC id = " + entry.getId());
         NpcImpl npc = entry.getNpc();
 
         if ((packet.getAction().equals(WrapperPlayClientInteractEntity.InteractAction.INTERACT)
@@ -59,19 +79,45 @@ public class InteractionPacketListener implements PacketListener {
         }
 
         InteractionType type = wrapClickType(packet.getAction());
+        dbg("  click type = " + type);
 
         User user = userManager.get(player);
-        if (!user.canInteract()) return;
+        if (!user.canInteract()) {
+            dbg("  -> DROPPED: canInteract() false (100ms debounce)");
+            return;
+        }
 
         NpcInteractEvent interactEvent = new NpcInteractEvent(player, entry, type);
         Bukkit.getPluginManager().callEvent(interactEvent);
-        if (interactEvent.isCancelled()) return;
-
-        for (InteractionAction action : npc.getActions()) {
-            if (action.getInteractionType() != InteractionType.ANY_CLICK && action.getInteractionType() != type) continue;
-            if (action.getCooldown() > 0 && !user.actionCooldownCheck(action)) continue;
-            scheduler.runLaterAsync(() -> action.run(player), action.getDelay());
+        if (interactEvent.isCancelled()) {
+            dbg("  -> DROPPED: NpcInteractEvent was cancelled by another plugin");
+            return;
         }
+
+        dbg("  NPC has " + npc.getActions().size() + " configured action(s)");
+        int ran = 0;
+        for (InteractionAction action : npc.getActions()) {
+            if (action.getInteractionType() != InteractionType.ANY_CLICK && action.getInteractionType() != type) {
+                dbg("    skip: action type " + action.getInteractionType() + " != " + type);
+                continue;
+            }
+            if (action.getCooldown() > 0 && !user.actionCooldownCheck(action)) {
+                dbg("    skip: action on cooldown");
+                continue;
+            }
+            dbg("    RUNNING action " + action.getClass().getSimpleName() + " (delay " + action.getDelay() + ")");
+            scheduler.runLaterAsync(() -> {
+                try {
+                    action.run(player);
+                    dbg("    action completed: " + action.getClass().getSimpleName());
+                } catch (Throwable t) {
+                    dbg("    action THREW: " + t);
+                    t.printStackTrace();
+                }
+            }, action.getDelay());
+            ran++;
+        }
+        dbg("  dispatched " + ran + " action(s)");
     }
 
     private InteractionType wrapClickType(WrapperPlayClientInteractEntity.InteractAction action) {
