@@ -19,7 +19,7 @@ dependencies {
     compileOnly "me.clip:placeholderapi:2.12.2" // Placeholder support
     implementation "com.google.code.gson:gson:2.10.1" // JSON parsing
     implementation "org.bstats:bstats-bukkit:3.0.2" // Plugin stats
-    implementation "com.github.retrooper:packetevents-spigot:2.14.0" // Packets
+    compileOnly "com.github.retrooper:packetevents-spigot:2.14.0" // Packets (the standalone plugin provides it at runtime)
     implementation "space.arim.dazzleconf:dazzleconf-ext-snakeyaml:1.2.1" // Configs
     implementation "lol.pyr:director-adventure:2.1.2" // Commands
 
@@ -59,8 +59,6 @@ shadowJar {
     relocate "net.kyori", "lol.pyr.znpcsplus.libraries.kyori"
     relocate "org.checkerframework", "lol.pyr.znpcsplus.libraries.checkerframework"
     relocate "com.google.gson", "lol.pyr.znpcsplus.libraries.gson"
-    relocate "com.github.retrooper.packetevents", "lol.pyr.znpcsplus.libraries.packetevents.api"
-    relocate "io.github.retrooper.packetevents", "lol.pyr.znpcsplus.libraries.packetevents.impl"
     relocate "org.yaml.snakeyaml", "lol.pyr.znpcsplus.libraries.snakeyaml"
     relocate "space.arim.dazzleconf", "lol.pyr.znpcsplus.libraries.dazzleconf"
     relocate "lol.pyr.director", "lol.pyr.znpcsplus.libraries.command"

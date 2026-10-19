@@ -4,7 +4,6 @@ import com.github.retrooper.packetevents.PacketEvents;
 import com.github.retrooper.packetevents.PacketEventsAPI;
 import com.github.retrooper.packetevents.event.PacketListenerPriority;
 import com.github.retrooper.packetevents.manager.server.ServerVersion;
-import io.github.retrooper.packetevents.factory.spigot.SpigotPacketEventsBuilder;
 import lol.pyr.director.adventure.command.CommandContext;
 import lol.pyr.director.adventure.command.CommandManager;
 import lol.pyr.director.adventure.command.MultiCommand;
@@ -85,10 +84,21 @@ public class ZNpcsPlus {
 
     public ZNpcsPlus(ZNpcsPlusBootstrap bootstrap) {
         this.bootstrap = bootstrap;
-        packetEvents = SpigotPacketEventsBuilder.build(bootstrap);
-        PacketEvents.setAPI(packetEvents);
-        packetEvents.getSettings().checkForUpdates(false);
-        packetEvents.load();
+        // Use the standalone packetevents plugin rather than a bundled copy. Two instances both
+        // injecting into the netty pipeline is what stopped NPC interactions being seen: outbound
+        // packets (so the NPCs themselves) worked, inbound interact packets never reached us.
+        //
+        // Nothing is built, loaded, init'd or terminated here any more - that is the owning plugin's
+        // job. Settings are not touched either, because they are shared with every other consumer.
+        // getAPI() is PacketEventsAPI<?> because it is platform agnostic; on Spigot the type
+        // parameter is Plugin, which is what the builder used to hand back
+        @SuppressWarnings("unchecked")
+        PacketEventsAPI<Plugin> sharedApi = (PacketEventsAPI<Plugin>) PacketEvents.getAPI();
+        packetEvents = sharedApi;
+        if (packetEvents == null) {
+            throw new IllegalStateException("PacketEvents is not available. ZNPCsPlus uses the standalone " +
+                    "packetevents plugin instead of bundling its own copy - install packetevents-spigot.");
+        }
 
         configManager = new ConfigManager(getDataFolder());
         skinCache = new MojangSkinCache(configManager, new File(getDataFolder(), "skins"));
@@ -115,7 +125,7 @@ public class ZNpcsPlus {
 
         log(ChatColor.WHITE + " * Initializing libraries...");
 
-        packetEvents.init();
+        // packetEvents.init() is deliberately NOT called: the standalone plugin owns the instance
 
         BukkitAudiences adventure = BukkitAudiences.create(bootstrap);
         shutdownTasks.add(adventure::close);
@@ -223,7 +233,8 @@ public class ZNpcsPlus {
             throwable.printStackTrace();
         }
         shutdownTasks.clear();
-        PacketEvents.getAPI().terminate();
+        // NO terminate() here. The instance belongs to the packetevents plugin, and shutting it down
+        // would kill PacketEvents for every other plugin using it (ExploitFixer, Vulcan, AntiCheat).
     }
 
     private PacketFactory setupPacketFactory(TaskScheduler scheduler, EntityPropertyRegistryImpl propertyRegistry, ConfigManager configManager) {

@@ -11,6 +11,11 @@ api-version: 1.13
 
 folia-supported: true
 
+# Hard dependency: packetevents is no longer bundled, and Bukkit loads depends first, so its
+# onLoad has already called PacketEvents.setAPI() by the time ours runs
+depend:
+  - packetevents
+
 softdepend:
   - PlaceholderAPI
   - ServersNPC
