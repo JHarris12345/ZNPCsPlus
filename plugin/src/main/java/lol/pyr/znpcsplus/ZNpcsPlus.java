@@ -119,7 +119,7 @@ public class ZNpcsPlus {
 
         BukkitAudiences adventure = NativeAudiences.wrap(BukkitAudiences.create(bootstrap));
         shutdownTasks.add(adventure::close);
-        if (NativeAdventure.isSupported()) log(ChatColor.WHITE + " * Sending messages through the server's own Adventure");
+        log(ChatColor.WHITE + " * Messages are sent through " + (NativeAdventure.isSupported() ? "the server's own Adventure" : "adventure-platform"));
 
         log(ChatColor.WHITE + " * Initializing components...");
 

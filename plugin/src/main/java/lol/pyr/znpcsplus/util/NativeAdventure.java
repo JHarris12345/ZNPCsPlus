@@ -30,23 +30,25 @@ import java.lang.reflect.Method;
  * then point at our own relocated copy instead of the server's.
  */
 public final class NativeAdventure {
+    private static final Class<?> AUDIENCE;
     private static final Object SERIALIZER;
     private static final Method DESERIALIZE;
     private static final Method SEND_COMPONENT;
 
     static {
+        Class<?> audience = null;
         Object serializer = null;
         Method deserialize = null;
         Method send = null;
         try {
             Class<?> nativeComponent = Class.forName(name("net", "kyori", "adventure", "text", "Component"));
-            for (Method method : CommandSender.class.getMethods()) {
-                if (!"sendMessage".equals(method.getName())) continue;
-                Class<?>[] params = method.getParameterTypes();
-                if (params.length == 1 && params[0].equals(nativeComponent)) {
-                    send = method;
-                    break;
-                }
+            audience = Class.forName(name("net", "kyori", "adventure", "audience", "Audience"));
+            // Deliberately asked of Audience and not of CommandSender. CommandSender still declares
+            // the deprecated sendMessage(BaseComponent...) overloads, so getMethods() on it throws
+            // NoClassDefFoundError outright on any server that has dropped the Bungee chat library,
+            // which is exactly the kind of server this class exists for.
+            if (audience.isAssignableFrom(CommandSender.class)) {
+                send = audience.getMethod("sendMessage", nativeComponent);
             }
             if (send != null) {
                 // Gson first because every version ships it; the json one is the newer spelling
@@ -63,6 +65,7 @@ public final class NativeAdventure {
             // Any failure at all means the server is not one we can send natively to
         }
         if (serializer == null || deserialize == null) send = null;
+        AUDIENCE = send == null ? null : audience;
         SERIALIZER = serializer;
         DESERIALIZE = deserialize;
         SEND_COMPONENT = send;
@@ -86,6 +89,7 @@ public final class NativeAdventure {
      */
     public static boolean send(CommandSender sender, Component message) {
         if (sender == null || message == null || SEND_COMPONENT == null) return false;
+        if (!AUDIENCE.isInstance(sender)) return false;
         try {
             String json = GsonComponentSerializer.gson().serialize(message);
             SEND_COMPONENT.invoke(sender, DESERIALIZE.invoke(SERIALIZER, json));
@@ -100,13 +104,19 @@ public final class NativeAdventure {
             Class<?> type = Class.forName(className);
             Object instance = type.getMethod(factoryMethod).invoke(null);
             if (instance == null) return null;
+            // ComponentSerializer declares deserialize(R), which ERASES to deserialize(Object):
+            // neither sub-interface redeclares it taking a String, so an exact String match finds
+            // nothing at all. Take anything a String can be passed to, preferring an exact match
+            // in case a future version does narrow it.
+            Method fallback = null;
             for (Method method : type.getMethods()) {
                 if (!"deserialize".equals(method.getName())) continue;
                 Class<?>[] params = method.getParameterTypes();
-                if (params.length == 1 && params[0].equals(String.class)) {
-                    return new Object[]{instance, method};
-                }
+                if (params.length != 1) continue;
+                if (params[0].equals(String.class)) return new Object[]{instance, method};
+                if (fallback == null && params[0].isAssignableFrom(String.class)) fallback = method;
             }
+            if (fallback != null) return new Object[]{instance, fallback};
         } catch (Throwable ignored) {
         }
         return null;
