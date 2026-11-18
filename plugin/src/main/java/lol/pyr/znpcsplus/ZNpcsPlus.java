@@ -117,8 +117,9 @@ public class ZNpcsPlus {
 
         packetEvents.init();
 
-        BukkitAudiences adventure = BukkitAudiences.create(bootstrap);
+        BukkitAudiences adventure = NativeAudiences.wrap(BukkitAudiences.create(bootstrap));
         shutdownTasks.add(adventure::close);
+        if (NativeAdventure.isSupported()) log(ChatColor.WHITE + " * Sending messages through the server's own Adventure");
 
         log(ChatColor.WHITE + " * Initializing components...");
 
